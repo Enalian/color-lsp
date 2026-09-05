@@ -228,7 +228,7 @@ pub fn parse(text: &str) -> Vec<ColorNode> {
                         }
                     }
                 }
-                'a'..='z' | 'A'..='Z' | '(' => {
+                'a'..='z' | 'A'..='Z' | '(' | '_' => {
                     // Avoid `Ok(hsla(`, to get `hsla(`
                     if token.contains('(') {
                         token.clear();
@@ -243,15 +243,13 @@ pub fn parse(text: &str) -> Vec<ColorNode> {
                                 if let Some(node) = match_color(&token, ix, token_offset) {
                                     token.clear();
                                     nodes.push(node);
-                                    offset += 1;
-                                    continue;
                                 }
                             }
                         }
                         
                         // Ref https://github.com/mazznoer/csscolorparser-rs
                         "hsl(" | "hsla(" | "rgb(" | "rgba(" | "hwb(" | "hwba(" | "oklab("
-                        | "oklch(" | "lab(" | "lch(" | "hsv(" | "Color(" | "color(" => {
+                        | "oklch(" | "lab(" | "lch(" | "hsv(" | "Color(" => {
                             // Find until the closing parenthesis
                             let end = line_text
                                 .chars()
