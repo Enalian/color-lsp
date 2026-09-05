@@ -50,6 +50,10 @@ fn try_parse_color(s: &str) -> Result<Color, ParseColorError> {
         return Ok(color);
     }
 
+    if let Ok(color) = try_parse_gmod_color(s) {
+        return Ok(color);
+    }
+
     csscolorparser::parse(s)
 }
 
@@ -102,6 +106,52 @@ fn try_parse_gpui_color(s: &str) -> Result<Color, ParseColorError> {
                 return Ok(Color::from_hsla(v0 * 360.0, v1, v2, alpha));
             } else {
                 return Err(ParseColorError::InvalidFunction);
+            }
+        }
+    }
+
+    Err(ParseColorError::InvalidUnknown)
+}
+
+/// Try to parse GMod colors like Color(255, 255, 255) or color_white
+fn try_parse_gmod_color(s: &str) -> Result<Color, ParseColorError> {
+    let s = s.trim();
+
+    match s {
+        "color_white" => return Ok(Color::new(1.0, 1.0, 1.0, 1.0)),
+        "color_black" => return Ok(Color::new(0.0, 0.0, 0.0, 1.0)),
+        "color_transparent" => return Ok(Color::new(0.0, 0.0, 0.0, 0.0)),
+        _ => {}
+    }
+
+    if let (Some(idx), Some(inner)) = (s.find('('), s.strip_suffix(')')) {
+        let fname = &s[..idx].trim_end();
+        
+        if fname.eq_ignore_ascii_case("color") {
+            let mut params = inner[idx + 1..]
+                .split(',')
+                .flat_map(str::split_ascii_whitespace);
+
+            let parse_u8 = |val: &str| -> Option<f32> {
+                val.parse::<f32>().ok().map(|v| v.clamp(0.0, 255.0) / 255.0)
+            };
+
+            let (Some(r_str), Some(g_str), Some(b_str)) = (params.next(), params.next(), params.next()) else {
+                return Err(ParseColorError::InvalidFunction);
+            };
+
+            if let (Some(r), Some(g), Some(b)) = (parse_u8(r_str), parse_u8(g_str), parse_u8(b_str)) {
+                let a = if let Some(a_str) = params.next() {
+                    parse_u8(a_str).unwrap_or(1.0)
+                } else {
+                    1.0
+                };
+                
+                if params.next().is_some() {
+                    return Err(ParseColorError::InvalidFunction);
+                }
+                
+                return Ok(Color::new(r, g, b, a));
             }
         }
     }
@@ -186,9 +236,22 @@ pub fn parse(text: &str) -> Vec<ColorNode> {
 
                     token.push(c);
                     match token.as_ref() {
+                        "color_white" | "color_black" | "color_transparent" => {
+                            let next_char = line_text.chars().nth(offset + 1).unwrap_or(' ');
+                            if !next_char.is_alphanumeric() && next_char != '_' {
+                                let token_offset = offset.saturating_sub(token.chars().count()) + 1;
+                                if let Some(node) = match_color(&token, ix, token_offset) {
+                                    token.clear();
+                                    nodes.push(node);
+                                    offset += 1;
+                                    continue;
+                                }
+                            }
+                        }
+                        
                         // Ref https://github.com/mazznoer/csscolorparser-rs
                         "hsl(" | "hsla(" | "rgb(" | "rgba(" | "hwb(" | "hwba(" | "oklab("
-                        | "oklch(" | "lab(" | "lch(" | "hsv(" => {
+                        | "oklch(" | "lab(" | "lch(" | "hsv(" | "Color(" | "color(" => {
                             // Find until the closing parenthesis
                             let end = line_text
                                 .chars()
@@ -210,6 +273,7 @@ pub fn parse(text: &str) -> Vec<ColorNode> {
                                 continue;
                             }
                         }
+
                         _ => {}
                     }
                 }
@@ -238,7 +302,7 @@ mod tests {
     use csscolorparser::Color;
     use tower_lsp::lsp_types;
 
-    use crate::parser::{match_color, parse, try_parse_gpui_color, ColorNode};
+    use crate::parser::{match_color, parse, try_parse_gpui_color, try_parse_gmod_color, ColorNode};
 
     #[test]
     fn test_match_color() {
@@ -440,5 +504,52 @@ mod tests {
             colors[4],
             ColorNode::must_parse("hsla(0.45, 0.7, 0.75, 1.0)", 4, 13)
         );
+    }
+
+    #[test]
+    fn test_try_parse_gmod_color() {
+        assert_eq!(
+            try_parse_gmod_color("Color(255, 0, 0)"),
+            Ok(Color::new(1.0, 0.0, 0.0, 1.0))
+        );
+        
+        assert_eq!(
+            try_parse_gmod_color("Color(  0 , 255 , 0 , 127 )"),
+            Ok(Color::new(0.0, 1.0, 0.0, 127.0 / 255.0))
+        );
+
+        assert_eq!(
+            try_parse_gmod_color("Color(300, -50, 255)"),
+            Ok(Color::new(1.0, 0.0, 1.0, 1.0))
+        );
+
+        assert_eq!(
+            try_parse_gmod_color("color_white"),
+            Ok(Color::new(1.0, 1.0, 1.0, 1.0))
+        );
+        assert_eq!(
+            try_parse_gmod_color("color_transparent"),
+            Ok(Color::new(0.0, 0.0, 0.0, 0.0))
+        );
+
+        assert!(try_parse_gmod_color("Color(255, 255)").is_err());
+        assert!(try_parse_gmod_color("color_whit").is_err());
+    }
+
+    #[test]
+    fn test_parse_gmod_scanner_integration() {
+        let text = "
+            local bg_col = Color(46, 46, 46)
+            draw.SimpleText('Hello', color_white, x, y)
+            local shadow = Color(0, 0, 0, 150)
+            local not_a_color = color_white_alpha
+        ";
+        let colors = parse(text);
+
+        assert_eq!(colors.len(), 3);
+        
+        assert_eq!(colors[0].matched, "Color(46, 46, 46)");
+        assert_eq!(colors[1].matched, "color_white");
+        assert_eq!(colors[2].matched, "Color(0, 0, 0, 150)");
     }
 }
