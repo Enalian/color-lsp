@@ -60,7 +60,7 @@ pub(crate) fn color_summary(color: Color) -> String {
 
     format!(
         "Colorspace Formats:\n\n```\n{}\n```\n{}",
-        vec![hex, hex_alpha, hsla_percent, hsla_float, rgba, rgba_float].join("\n"),
+        [hex, hex_alpha, hsla_percent, hsla_float, rgba, rgba_float].join("\n"),
         color_link
     )
 }
