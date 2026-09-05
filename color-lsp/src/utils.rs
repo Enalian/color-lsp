@@ -56,7 +56,7 @@ pub(crate) fn color_summary(color: Color) -> String {
     //     &hex[1..]
     // );
 
-    let color_link = format!("\n[Color Picker](https://colorpicker.dev/{})", &hex);
+    let color_link = format!("\n[Color Picker](https://colorpicker.dev/{})", hex);
 
     format!(
         "Colorspace Formats:\n\n```\n{}\n```\n{}",
