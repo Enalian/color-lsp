@@ -1,10 +1,10 @@
 id = "color-highlight"
 name = "Color Highlight"
 description = "Highlight colors in your editor based on color-lsp."
-version = "0.3.0"
+version = "0.4.0"
 schema_version = 1
 authors = ["Jason Lee <huacnlee@gmail.com>"]
-repository = "https://github.com/huacnlee/color-lsp/tree/main/zed-color-highlight"
+repository = "https://github.com/Enalian/color-lsp/tree/main/zed-color-highlight"
 
 [language_servers.color-lsp]
 name = "ColorLSP Server"
@@ -33,5 +33,7 @@ languages = [
     "Ruby",
     "Python",
     "Go",
+    "Lua",
+    "GLua",
 ]
 code_action_kinds = []
