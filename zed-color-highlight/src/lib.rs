@@ -1,7 +1,7 @@
 use std::fs;
 use zed_extension_api::{self as zed, Result};
 
-const GITHUB_REPO: &str = "huacnlee/color-lsp";
+const GITHUB_REPO: &str = "Enalian/color-lsp";
 
 #[inline]
 fn bin_name() -> &'static str {
